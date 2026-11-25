@@ -1,6 +1,6 @@
 # Avnet ZUBoard 1CG: Comprehensive Getting Started Tutorial
 
-Welcome to the **Avnet ZUBoard 1CG** (AMD Zynq™ UltraScale+™ MPSoC `xczu1cg-sbva484-1-e`) hands-on learning repository. This guide is designed as a structured, step-by-step tutorial taking you from initial hardware bring-up and out-of-the-box demonstrations to custom Programmable Logic (PL) hardware design in Vivado, bare-metal C++ firmware development in Vitis, and building a custom PetaLinux image for the dual-camera module.
+Welcome to the **Avnet ZUBoard 1CG** (AMD Zynq™ UltraScale+™ MPSoC `xczu1cg-sbva484-1-e`) hands-on learning repository. This guide is designed as a structured, step-by-step tutorial taking you from initial hardware bring-up and out-of-the-box demonstrations to custom Programmable Logic (PL) hardware design in Vivado, bare-metal C++ firmware development in Vitis, and building a custom PetaLinux image for the dual-camera module with OpenCV stereo vision processing.
 
 ---
 
@@ -19,6 +19,7 @@ Welcome to the **Avnet ZUBoard 1CG** (AMD Zynq™ UltraScale+™ MPSoC `xczu1cg-
    - [Part A: Generating the Vivado Hardware Design (XSA)](#part-a-generating-the-vivado-hardware-design-xsa)
    - [Part B: Building the PetaLinux Image Inside Docker](#part-b-building-the-petalinux-image-inside-docker)
    - [Part C: Booting & Running the Dual-Camera Passthrough Demo](#part-c-booting--running-the-dual-camera-passthrough-demo)
+   - [Part D: Running the Stereo Vision & Depth Tracking Proof of Concept (`dualcam_poc.py`)](#part-d-running-the-stereo-vision--depth-tracking-proof-of-concept-dualcam_pocpy)
 8. [Troubleshooting & Helpful Shortcuts](#troubleshooting--helpful-shortcuts)
 
 ---
@@ -40,6 +41,8 @@ zuboard-1cg-getting-started/
 │       ├── main.cpp                               # Bare-metal C++ AXI GPIO polling application
 │       └── UserConfig.cmake                       # Vitis CMake configuration snippet for C++ compilation
 └── 04-dual-camera-petalinux/
+    ├── examples/
+    │   └── dualcam_poc.py                         # OpenCV GStreamer StereoSGBM disparity & depth tracking PoC
     └── scripts/
         └── setup_docker_petalinux.sh              # Automation script for Ubuntu 22.04 Docker PetaLinux build
 ```
@@ -54,7 +57,7 @@ zuboard-1cg-getting-started/
 3. **Micro-USB Cable**: Used for UART serial console and JTAG debugging
 4. **Ethernet Cable**: RJ45 patch cable for network connectivity and web/SSH access
 5. **MicroSD Card**: 32 GB capacity (Class 10 / UHS-I recommended)
-6. *(Optional for Module 4)* **Avnet Dual-Camera Mezzanine Module** (AR0144 sensors)
+6. *(Optional for Module 4)* **Avnet Dual-Camera Mezzanine Module** (dual AR0144 sensors)
 
 ### Boot Mode Switch (`SW2`) Reference
 The 4-position DIP switch **SW2** controls the Zynq UltraScale+ MPSoC boot source. Ensure power is disconnected before changing switch positions:
@@ -321,12 +324,21 @@ Because PetaLinux 2024.2 officially supports Ubuntu 22.04 LTS, running the build
    ```bash
    docker pull ubuntu:22.04
 
-   docker run -it --name petalinux_env      -v /home/$USER/dual_camera:/workspace      -v /home/$USER/apps:/home/$USER/apps      ubuntu:22.04
+   docker run -it --name petalinux_env \
+     -v /home/$USER/dual_camera:/workspace \
+     -v /home/$USER/apps:/home/$USER/apps \
+     ubuntu:22.04
    ```
 2. **Install PetaLinux Dependencies & Configure Non-Root User:**
    Inside the container (or by running [`04-dual-camera-petalinux/scripts/setup_docker_petalinux.sh`](04-dual-camera-petalinux/scripts/setup_docker_petalinux.sh)), install required packages, set `en_US.UTF-8` locales, and create a `builder` user (PetaLinux refuses to run as `root`):
    ```bash
-   apt-get update && apt-get install -y      sudo locales build-essential gawk gcc git make net-tools ncurses-dev      libncurses5-dev zlib1g-dev libssl-dev flex bison libselinux1 gnupg wget      diffstat chrpath socat xterm autoconf libtool texinfo unzip tar cpio      python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping      python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev x11-utils      libtinfo5 dnsutils rsync bc gcc-multilib lsb-release nano
+   apt-get update && apt-get install -y \
+     sudo locales build-essential gawk gcc git make net-tools ncurses-dev \
+     libncurses5-dev zlib1g-dev libssl-dev flex bison libselinux1 gnupg wget \
+     diffstat chrpath socat xterm autoconf libtool texinfo unzip tar cpio \
+     python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping \
+     python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev x11-utils \
+     libtinfo5 dnsutils rsync bc gcc-multilib lsb-release nano
 
    locale-gen en_US.UTF-8
    update-locale LANG=en_US.UTF-8
@@ -396,12 +408,53 @@ Because PetaLinux 2024.2 officially supports Ubuntu 22.04 LTS, running the build
 
 ---
 
+### Part D: Running the Stereo Vision & Depth Tracking Proof of Concept (`dualcam_poc.py`)
+
+Once you have verified that the passthrough demonstration works cleanly, you can run our custom OpenCV stereo vision Proof of Concept ([`04-dual-camera-petalinux/examples/dualcam_poc.py`](04-dual-camera-petalinux/examples/dualcam_poc.py)) located in `/home/root/dualcam_poc.py` (or `/root/dualcam_poc.py` depending on your root home path) on the ZUBoard.
+
+#### How `dualcam_poc.py` Works
+1. **Zero-Copy GStreamer Capture (`dmabuf`):** Captures a side-by-side `1280×480` BGR stream at `60 fps` from `/dev/video0` using `v4l2src io-mode="dmabuf"` into an OpenCV `appsink`.
+2. **Stereo Frame Splitting:** Splits each combined frame horizontally into left (`imgL`, `640×480`) and right (`imgR`, `640×480`) grayscale images.
+3. **Disparity Map Computation (`StereoSGBM`):** Uses OpenCV's Semi-Global Block Matching (`cv2.StereoSGBM_create`, 3-way mode, `numDisparities=32`, `blockSize=5`) to compute pixel disparity between the left and right cameras.
+4. **Brightness-Threshold Object Tracking & Depth Estimation:**
+   - Applies a binary threshold (`> 200`) on the monochrome left image to isolate bright targets (such as a torch/flashlight or reflective marker) with contour area `> 100` pixels.
+   - Calculates average disparity inside the target bounding box and estimates physical distance using the pinhole stereo formula:
+     $$	ext{Depth (m)} = rac{f 	imes B}{ar{d}}$$
+     where focal length $f = 700	ext{ px}$, stereo baseline $B = 0.06	ext{ m}$ ($60	ext{ mm}$), and $ar{d}$ is the mean disparity in pixels.
+5. **Real-Time Visualisation:** Renders two OpenCV windows over X11 forwarding:
+   - **`ZUBoard Left Eye Tracking`**: Live left camera feed with green bounding box and estimated depth overlay (`Depth: X.XXm`).
+   - **`ZUBoard Disparity Map`**: False-colour disparity map (`COLORMAP_JET`).
+
+#### Step-by-Step Execution
+1. **Transfer `dualcam_poc.py` to `/home/root/` on the ZUBoard** *(if not already present on the target filesystem)*:
+   From your host PC terminal, copy the script from this repository over `scp`:
+   ```bash
+   scp 04-dual-camera-petalinux/examples/dualcam_poc.py root@192.168.2.100:/home/root/dualcam_poc.py
+   ```
+   *(Note: On PetaLinux, the `root` user's home directory `~` is `/home/root`; if you placed the file directly in `/root/dualcam_poc.py`, adjust the path below accordingly.)*
+2. **Connect via SSH with X11 Forwarding Enabled:**
+   Ensure the passthrough script from Part C has been stopped (`Ctrl+C`) so `/dev/video0` is free, then run:
+   ```bash
+   ssh -X root@192.168.2.100
+   ```
+3. **Launch the Stereo Vision PoC:**
+   ```bash
+   python3 /home/root/dualcam_poc.py
+   ```
+   *(Or `python3 /root/dualcam_poc.py` if stored directly under `/root/`.)*
+4. **Test & Exit:**
+   - Hold a bright light source or high-contrast object in front of both AR0144 lenses to observe bounding-box tracking, depth calculation in metres, and the live JET colourmap disparity window.
+   - Press **`q`** inside either OpenCV window or **`Ctrl+C`** in the SSH terminal to release `/dev/video0` cleanly and exit.
+
+---
+
 ## Troubleshooting & Helpful Shortcuts
 
 * **No Output in `picocom`:** Verify whether the USB-UART enumerates as `/dev/ttyUSB0`, `/dev/ttyUSB1`, or `/dev/ttyUSB2` (`ls /dev/ttyUSB*`), and press **SW6** (PS Reset) after opening `picocom`.
 * **`picocom` Keyboard Shortcuts:**
   * `Ctrl+A` then `Ctrl+X`: Exit `picocom` cleanly.
   * `Ctrl+A` then `Ctrl+U`: Increase baud rate.
+* **Cannot Open `/dev/video0` in `dualcam_poc.py`:** Ensure `avnet_dualcam_passthrough.py` is no longer running in the background (`ps aux | grep python3`), and verify that the media pipeline was initialised at least once after boot (running and stopping `avnet_dualcam_passthrough.py` configures the V4L2 subdevices and links).
 * **Vivado Out-of-Memory During Dual-Camera Synthesis:** Create a temporary swap file on Ubuntu before launching Vivado:
   ```bash
   sudo fallocate -l 16G /swapfile
