@@ -1,0 +1,12 @@
+{
+  "name": "stereo_tracker_accel",
+  "type": "HLS",
+  "configuration": {
+    "componentType": "HLS",
+    "configFiles": [
+      "hls_config.cfg"
+    ],
+    "work_dir": "stereo_tracker_accel"
+  },
+  "template": "empty_hls_component"
+}

@@ -1,6 +1,6 @@
 # Avnet ZUBoard 1CG: Comprehensive Getting Started Tutorial
 
-Welcome to the **Avnet ZUBoard 1CG** (AMD Zynq™ UltraScale+™ MPSoC `xczu1cg-sbva484-1-e`) hands-on learning repository. This guide is designed as a structured, step-by-step tutorial taking you from initial hardware bring-up and out-of-the-box demonstrations to custom Programmable Logic (PL) hardware design in Vivado, bare-metal C++ firmware development in Vitis, and building a custom PetaLinux image for the dual-camera module with OpenCV stereo vision processing.
+Welcome to the **Avnet ZUBoard 1CG** (AMD Zynq™ UltraScale+™ MPSoC `xczu1cg-sbva484-1-e`) hands-on learning repository. This guide is designed as a structured, step-by-step tutorial taking you from initial hardware bring-up and out-of-the-box demonstrations to custom Programmable Logic (PL) hardware design in Vivado, bare-metal C++ firmware development in Vitis, building a custom PetaLinux image for the dual-camera module, and packaging your own **Vitis HLS Custom AXI IP** to offload stereo disparity and target tracking into the FPGA fabric.
 
 ---
 
@@ -20,7 +20,12 @@ Welcome to the **Avnet ZUBoard 1CG** (AMD Zynq™ UltraScale+™ MPSoC `xczu1cg-
    - [Part B: Building the PetaLinux Image Inside Docker](#part-b-building-the-petalinux-image-inside-docker)
    - [Part C: Booting & Running the Dual-Camera Passthrough Demo](#part-c-booting--running-the-dual-camera-passthrough-demo)
    - [Part D: Running the Stereo Vision & Depth Tracking Proof of Concept (`dualcam_poc.py`)](#part-d-running-the-stereo-vision--depth-tracking-proof-of-concept-dualcam_pocpy)
-8. [Troubleshooting & Helpful Shortcuts](#troubleshooting--helpful-shortcuts)
+8. [Module 5: Hardware Acceleration with a Custom Vitis HLS AXI IP](#module-5-hardware-acceleration-with-a-custom-vitis-hls-axi-ip)
+   - [Part A: Architecture Partitioning (PS vs PL)](#part-a-architecture-partitioning-ps-vs-pl)
+   - [Part B: Synthesising & Packaging the Custom IP in Vitis HLS](#part-b-synthesising--packaging-the-custom-ip-in-vitis-hls)
+   - [Part C: Integrating the Custom IP into the Vivado Block Design](#part-c-integrating-the-custom-ip-into-the-vivado-block-design)
+   - [Part D: Driving the Hardware Accelerator from Linux (`dualcam_fpga_accel.py`)](#part-d-driving-the-hardware-accelerator-from-linux-dualcam_fpga_accelpy)
+9. [Troubleshooting & Helpful Shortcuts](#troubleshooting--helpful-shortcuts)
 
 ---
 
@@ -40,11 +45,18 @@ zuboard-1cg-getting-started/
 │   └── src/
 │       ├── main.cpp                               # Bare-metal C++ AXI GPIO polling application
 │       └── UserConfig.cmake                       # Vitis CMake configuration snippet for C++ compilation
-└── 04-dual-camera-petalinux/
-    ├── examples/
-    │   └── dualcam_poc.py                         # OpenCV GStreamer StereoSGBM disparity & depth tracking PoC
-    └── scripts/
-        └── setup_docker_petalinux.sh              # Automation script for Ubuntu 22.04 Docker PetaLinux build
+├── 04-dual-camera-petalinux/
+│   ├── examples/
+│   │   └── dualcam_poc.py                         # OpenCV GStreamer StereoSGBM disparity & depth tracking PoC
+│   └── scripts/
+│       └── setup_docker_petalinux.sh              # Automation script for Ubuntu 22.04 Docker PetaLinux build
+└── 05-custom-hls-stereo-ip/
+    ├── hls_src/
+    │   ├── stereo_tracker.hpp                     # Custom HLS IP header (AXI4-Stream + AXI4-Lite registers)
+    │   ├── stereo_tracker.cpp                     # Synthesizable C++ sliding-window SAD stereo & centroid core
+    │   └── stereo_tracker_tb.cpp                  # C-simulation & Co-simulation testbench
+    └── host/
+        └── dualcam_fpga_accel.py                  # Linux UIO/DMA user-space driver & visualisation script
 ```
 
 ---
@@ -57,7 +69,7 @@ zuboard-1cg-getting-started/
 3. **Micro-USB Cable**: Used for UART serial console and JTAG debugging
 4. **Ethernet Cable**: RJ45 patch cable for network connectivity and web/SSH access
 5. **MicroSD Card**: 32 GB capacity (Class 10 / UHS-I recommended)
-6. *(Optional for Module 4)* **Avnet Dual-Camera Mezzanine Module** (dual AR0144 sensors)
+6. *(Optional for Modules 4 & 5)* **Avnet Dual-Camera Mezzanine Module** (dual AR0144 sensors)
 
 ### Boot Mode Switch (`SW2`) Reference
 The 4-position DIP switch **SW2** controls the Zynq UltraScale+ MPSoC boot source. Ensure power is disconnected before changing switch positions:
@@ -77,14 +89,15 @@ The 4-position DIP switch **SW2** controls the Zynq UltraScale+ MPSoC boot sourc
 The tutorials in this repository were validated using the following host environment:
 
 * **Host Operating System:** Ubuntu 24.04.4 LTS
-* **AMD Unified Installer:** `FPGAs_AdaptiveSoCs_Unified_SDI_2026.1_0616_1700_Lin64` (includes Vivado™ and Vitis™ 2026.1)
-* **PetaLinux Toolchain (Module 4):** PetaLinux 2024.2 & Vivado 2024.2 (executed cleanly inside an Ubuntu 22.04 Docker container)
+* **AMD Unified Installer:** `FPGAs_AdaptiveSoCs_Unified_SDI_2026.1_0616_1700_Lin64` (includes Vivado™, Vitis™, and Vitis HLS 2026.1)
+* **PetaLinux Toolchain (Modules 4 & 5):** PetaLinux 2024.2 & Vivado 2024.2 (executed cleanly inside an Ubuntu 22.04 Docker container)
 
 ### Verifying Your Vitis & Cross-Compiler Installation
 After sourcing your AMD tools installation script (e.g. `source /tools/Xilinx/Vitis/2026.1/settings64.sh`), verify that Vitis and the bare-metal ARM toolchains are accessible in your `PATH`:
 
 ```bash
 which vitis
+which vitis-run
 aarch64-none-elf-gcc --version
 armr5-none-eabi-gcc --version
 ```
@@ -397,9 +410,9 @@ Because PetaLinux 2024.2 officially supports Ubuntu 22.04 LTS, running the build
      ```bash
      ifconfig end0 192.168.2.100 netmask 255.255.255.0
      ```
-   - Open a **new terminal** on your host PC (with an active X11 display server) and connect via SSH with X11 forwarding enabled (`-X`):
+   - Open a **new terminal** on your host PC (with an active X11 display server) and connect via SSH with X11 forwarding enabled (`-Y`):
      ```bash
-     ssh -X root@192.168.2.100
+     ssh -Y root@192.168.2.100
      ```
    - Run the Avnet dual-camera Python passthrough example to stream live video from both AR0144 sensors back to your PC display:
      ```bash
@@ -410,41 +423,110 @@ Because PetaLinux 2024.2 officially supports Ubuntu 22.04 LTS, running the build
 
 ### Part D: Running the Stereo Vision & Depth Tracking Proof of Concept (`dualcam_poc.py`)
 
-Once you have verified that the passthrough demonstration works cleanly, you can run our custom OpenCV stereo vision Proof of Concept ([`04-dual-camera-petalinux/examples/dualcam_poc.py`](04-dual-camera-petalinux/examples/dualcam_poc.py)) located in `/home/root/dualcam_poc.py` (or `/root/dualcam_poc.py` depending on your root home path) on the ZUBoard.
+Once you have verified that the passthrough demonstration works cleanly, you can run our baseline software-only OpenCV stereo vision Proof of Concept ([`04-dual-camera-petalinux/examples/dualcam_poc.py`](04-dual-camera-petalinux/examples/dualcam_poc.py)) located in `/home/root/dualcam_poc.py` (or `/root/dualcam_poc.py`) on the ZUBoard.
 
 #### How `dualcam_poc.py` Works
 1. **Zero-Copy GStreamer Capture (`dmabuf`):** Captures a side-by-side `1280×480` BGR stream at `60 fps` from `/dev/video0` using `v4l2src io-mode="dmabuf"` into an OpenCV `appsink`.
 2. **Stereo Frame Splitting:** Splits each combined frame horizontally into left (`imgL`, `640×480`) and right (`imgR`, `640×480`) grayscale images.
-3. **Disparity Map Computation (`StereoSGBM`):** Uses OpenCV's Semi-Global Block Matching (`cv2.StereoSGBM_create`, 3-way mode, `numDisparities=32`, `blockSize=5`) to compute pixel disparity between the left and right cameras.
+3. **Disparity Map Computation (`StereoSGBM`):** Uses OpenCV's Semi-Global Block Matching (`cv2.StereoSGBM_create`, 3-way mode, `numDisparities=32`, `blockSize=5`) on the ARM Cortex-A53 CPU to compute pixel disparity between the left and right cameras.
 4. **Brightness-Threshold Object Tracking & Depth Estimation:**
-   - Applies a binary threshold (`> 200`) on the monochrome left image to isolate bright targets (such as a torch/flashlight or reflective marker) with contour area `> 100` pixels.
+   - Applies a binary threshold (`> 200`) on the monochrome left image to isolate bright targets with contour area `> 100` pixels.
    - Calculates average disparity inside the target bounding box and estimates physical distance using the pinhole stereo formula:
      $$	ext{Depth (m)} = rac{f 	imes B}{ar{d}}$$
      where focal length $f = 700	ext{ px}$, stereo baseline $B = 0.06	ext{ m}$ ($60	ext{ mm}$), and $ar{d}$ is the mean disparity in pixels.
-5. **Real-Time Visualisation:** Renders two OpenCV windows over X11 forwarding:
-   - **`ZUBoard Left Eye Tracking`**: Live left camera feed with green bounding box and estimated depth overlay (`Depth: X.XXm`).
-   - **`ZUBoard Disparity Map`**: False-colour disparity map (`COLORMAP_JET`).
 
 #### Step-by-Step Execution
-1. **Transfer `dualcam_poc.py` to `/home/root/` on the ZUBoard** *(if not already present on the target filesystem)*:
-   From your host PC terminal, copy the script from this repository over `scp`:
+1. **Transfer `dualcam_poc.py` to `/home/root/` on the ZUBoard**:
    ```bash
    scp 04-dual-camera-petalinux/examples/dualcam_poc.py root@192.168.2.100:/home/root/dualcam_poc.py
    ```
-   *(Note: On PetaLinux, the `root` user's home directory `~` is `/home/root`; if you placed the file directly in `/root/dualcam_poc.py`, adjust the path below accordingly.)*
-2. **Connect via SSH with X11 Forwarding Enabled:**
-   Ensure the passthrough script from Part C has been stopped (`Ctrl+C`) so `/dev/video0` is free, then run:
+2. **Connect via SSH with X11 Forwarding Enabled (`-Y`) and Run:**
    ```bash
-   ssh -X root@192.168.2.100
+   ssh -Y root@192.168.2.100
+   python3 dualcam_poc.py
    ```
-3. **Launch the Stereo Vision PoC:**
+3. Press **`q`** inside either OpenCV window or **`Ctrl+C`** in the SSH terminal to exit cleanly.
+
+---
+
+## Module 5: Hardware Acceleration with a Custom Vitis HLS AXI IP
+
+In Module 4 Part D, all pixel-level stereo matching (`StereoSGBM`) and brightness thresholding executed purely in software on the ARM Cortex-A53 cores. In this module, you will build a **genuine Custom IP core** using **Vitis HLS (High-Level Synthesis)** to offload the per-pixel stereo disparity search and bright-target segmentation directly into the ZU1CG Programmable Logic (PL) fabric.
+
+### Part A: Architecture Partitioning (PS vs PL)
+
+Because the ZU1CG (`xczu1cg-sbva484-1-e`) has compact FPGA resources (`37,440` logic cells, `108` BRAM_18K blocks, `216` DSP slices), an effective hardware/software co-design partitions the workload cleanly:
+
+| Processing Stage | Execution Target | Implementation Details |
+| :--- | :---: | :--- |
+| **1. Frame Capture & Grayscale Conversion** | PS / Video Pipeline | Captures `1280×480` side-by-side frames (`640×480` Left + `640×480` Right) and streams pixels via **AXI4-Stream (`axis`)** or **AXI DMA** |
+| **2. Sliding-Window Stereo Disparity (SAD)** | **PL Custom IP (`stereo_tracker_accel`)** | Uses `5×5` line buffers (`hls::LineBuffer`) and window buffers (`hls::Window`) with `II=1` pipelining to evaluate `32` disparity candidates in parallel per clock cycle |
+| **3. Brightness Thresholding & Moment Accumulation** | **PL Custom IP (`stereo_tracker_accel`)** | Applies configurable threshold (`thresh`, default `200`), accumulates bounding box (`min_x`, `max_x`, `min_y`, `max_y`), pixel area, and disparity sum on the fly in hardware |
+| **4. Depth Calculation & X11 Visualisation** | PS (Python / OpenCV) | Reads the hardware-computed bounding box, area, and mean disparity via **AXI4-Lite (`s_axilite`)** registers in microseconds and renders the overlay |
+
+---
+
+### Part B: Synthesising & Packaging the Custom IP in Vitis HLS
+
+All synthesizable C++ source files and a self-checking testbench are provided in [`05-custom-hls-stereo-ip/hls_src/`](05-custom-hls-stereo-ip/hls_src/):
+
+* **`stereo_tracker.hpp`**: Defines the `ap_axiu<16, 1, 1, 1>` side-by-side pixel stream interface (lower 8 bits = Left pixel, upper 8 bits = Right pixel) and the AXI4-Lite control/status register map.
+* **`stereo_tracker.cpp`**: Implements the `II=1` pipelined `5×5` Sum of Absolute Differences (SAD) stereo matching engine (`MAX_DISP = 32`), brightness thresholding (`grayL > thresh`), and hardware bounding-box/disparity accumulator.
+* **`stereo_tracker_tb.cpp`**: Generates a synthetic stereo image pair with a known bright target shifted by `14` pixels (`Depth = 700 * 0.06 / 14 = 3.00 m`) to verify C-simulation and RTL co-simulation before exporting to Vivado.
+
+#### Step-by-Step Vitis HLS Workflow
+1. **Source the Vitis 2024.2 (or 2026.1) Environment:**
    ```bash
-   python3 /home/root/dualcam_poc.py
+   source /home/<user>/apps/Vitis/2024.2/settings64.sh
    ```
-   *(Or `python3 /root/dualcam_poc.py` if stored directly under `/root/`.)*
-4. **Test & Exit:**
-   - Hold a bright light source or high-contrast object in front of both AR0144 lenses to observe bounding-box tracking, depth calculation in metres, and the live JET colourmap disparity window.
-   - Press **`q`** inside either OpenCV window or **`Ctrl+C`** in the SSH terminal to release `/dev/video0` cleanly and exit.
+2. **Create a Vitis HLS Component:**
+   - Launch Vitis Unified IDE (`vitis &`), select **File** → **New Component** → **HLS**, and name it `stereo_tracker_accel`.
+   - Add [`stereo_tracker.cpp`](05-custom-hls-stereo-ip/hls_src/stereo_tracker.cpp) and [`stereo_tracker.hpp`](05-custom-hls-stereo-ip/hls_src/stereo_tracker.hpp) as **Design Files**, and set the top function to **`stereo_tracker_accel`**.
+   - Add [`stereo_tracker_tb.cpp`](05-custom-hls-stereo-ip/hls_src/stereo_tracker_tb.cpp) as the **Test Bench File**.
+   - Select the target part **`xczu1cg-sbva484-1-e`** and set the clock period to **`6.67 ns`** (`150 MHz`).
+3. **Run C Simulation, Synthesis, and IP Export:**
+   - **C Simulation:** Click **Run** under **C SIMULATION** to confirm the testbench prints `PASS: Hardware disparity matches expected shift (14 px)`.
+   - **C Synthesis:** Click **Run** under **C SYNTHESIS** to compile C++ into Verilog/VHDL RTL and verify `Interval = 1` on the main pixel loop.
+   - **Package IP:** Click **Run** under **PACKAGE** to export the Vivado IP archive (`.zip`) into `stereo_tracker_accel/hls/impl/ip/`.
+
+---
+
+### Part C: Integrating the Custom IP into the Vivado Block Design
+
+Now integrate your newly packaged Custom IP into the Avnet dual-camera Vivado project created in Module 4 Part A:
+
+1. **Add the Custom IP Repository to Vivado:**
+   - Open `~/dual_camera/hdl/projects/zub1cg_sbc_dualcam_2024_2/zub1cg_sbc_dualcam.xpr` in Vivado 2024.2.
+   - Navigate to **Settings** → **IP** → **Repository**, click **`+`**, and point to the exported HLS IP folder (`stereo_tracker_accel/hls/impl/ip`). Click **OK**.
+2. **Instantiate & Connect `stereo_tracker_accel` in the Block Design:**
+   - Open the block design, click **`+`** (Add IP), search for **`Stereo_tracker_accel`**, and add it to the canvas.
+   - Add an **AXI Direct Memory Access (`axi_dma_0`)** block (disable Scatter/Gather Engine, enable both Read Channel `MM2S` and Write Channel `S2MM` with `16`-bit stream width).
+   - Connect the AXI interfaces:
+     - `axi_dma_0/M_AXIS_MM2S` → `stereo_tracker_accel/in_stream` (packed Left+Right pixel stream).
+     - `stereo_tracker_accel/out_disp_stream` → `axi_dma_0/S_AXIS_S2MM` (computed 8-bit disparity map stream).
+     - `stereo_tracker_accel/s_axi_control` and `axi_dma_0/S_AXI_LITE` → `ps8_0_axi_periph` (controlled by the ARM Cortex-A53).
+     - `axi_dma_0/M_AXI_MM2S` & `axi_dma_0/M_AXI_S2MM` → `zynq_ultra_ps_e_0/S_AXI_HP0_FPD` (high-performance DDR4 memory port).
+3. **Generate Bitstream & Rebuild PetaLinux Image:**
+   - Validate the design (`F6`), click **Generate Bitstream**, and export the updated `.xsa` (**File** → **Export** → **Export Hardware...** with **Include bitstream** ticked).
+   - Re-import the new `.xsa` into your PetaLinux project inside Docker (`petalinux-config --get-hw-description=<path_to_new_xsa>`) and rebuild `rootfs.wic` (`petalinux-build && petalinux-package --wic`).
+
+---
+
+### Part D: Driving the Hardware Accelerator from Linux (`dualcam_fpga_accel.py`)
+
+Once the updated PetaLinux image boots on the ZUBoard 1CG, [`05-custom-hls-stereo-ip/host/dualcam_fpga_accel.py`](05-custom-hls-stereo-ip/host/dualcam_fpga_accel.py) interfaces directly with your Custom IP registers via Linux `/dev/uio*` (or `/dev/mem`) memory-mapped I/O:
+
+1. **Copy the Accelerated Host Script to the ZUBoard:**
+   ```bash
+   scp 05-custom-hls-stereo-ip/host/dualcam_fpga_accel.py root@192.168.2.100:/home/root/dualcam_fpga_accel.py
+   ```
+2. **Verify UIO Device & Run:**
+   ```bash
+   ssh -Y root@192.168.2.100
+   ls /dev/uio*
+   python3 /home/root/dualcam_fpga_accel.py
+   ```
+   The script configures the threshold (`200`), triggers the hardware core, reads back the detected bounding box (`min_x`, `max_x`, `min_y`, `max_y`), pixel area, and accumulated disparity directly from the AXI4-Lite registers, and computes physical target depth in metres without running `StereoSGBM` on the CPU.
 
 ---
 

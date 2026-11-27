@@ -1,0 +1,157 @@
+<ENTRY>
+{
+ "thisFile": "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_accel/stereo_tracker_accel/stereo_tracker_accel.hlsrun_csim_summary",
+ "connectId": "",
+ "serverToken": "",
+ "timestamp": "0"
+}
+</ENTRY>
+<ENTRY>
+{
+ "type": "ET_CmdStep",
+ "dateTimestamp": "Fri Nov 27 10:54:24 2026",
+ "timestampMillis": "1795776864186",
+ "buildStep": {
+  "cmdId": "fe3a8d2a-55cc-4959-a42b-aa392dc1e275",
+  "name": "vitis-run",
+  "logFile": "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_accel/stereo_tracker_accel/logs/stereo_tracker_accel.steps.log",
+  "commandLine": "/home/hsun/apps/Vitis/2024.2/bin/unwrapped/lnx64.o/vitis-run  --mode hls --csim --config /home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_accel/hls_config.cfg --work_dir stereo_tracker_accel ",
+  "args": [
+   "--mode",
+   "hls",
+   "--csim",
+   "--config",
+   "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_accel/hls_config.cfg",
+   "--work_dir",
+   "stereo_tracker_accel"
+  ],
+  "iniFiles": [],
+  "cwd": "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_accel"
+ }
+}
+</ENTRY>
+<ENTRY>
+{
+ "type": "ET_Status",
+ "dateTimestamp": "Fri Nov 27 10:54:24 2026",
+ "timestampMillis": "1795776864186",
+ "status": {
+  "cmdId": "fe3a8d2a-55cc-4959-a42b-aa392dc1e275",
+  "state": "CS_RUNNING"
+ }
+}
+</ENTRY>
+<ENTRY>
+{
+ "type": "ET_FlowMetaData",
+ "dateTimestamp": "Fri Nov 27 10:54:27 2026",
+ "timestampMillis": "1795776867069",
+ "buildSummary": {
+  "hardwarePlatform": "",
+  "hardwareDsa": "",
+  "platformDirectory": "",
+  "runtime": "",
+  "systemConfig": "",
+  "flow": "BF_RUN",
+  "target": "TT_HLS_C_SIM",
+  "kernels": [
+   {
+    "base": {
+     "type": "KERNEL",
+     "name": "stereo_tracker_accel",
+     "file": "",
+     "reports": [],
+     "uuid": ""
+    },
+    "sources": [
+     "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker.cpp",
+     "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker.hpp"
+    ],
+    "psSources": [],
+    "cuNames": [],
+    "type": "HLS",
+    "frequency": 0,
+    "freqUnits": ""
+   }
+  ],
+  "toolVersion": "2024.2"
+ }
+}
+</ENTRY>
+<ENTRY>
+{
+ "type": "ET_SubCmdStep",
+ "dateTimestamp": "Fri Nov 27 10:54:27 2026",
+ "timestampMillis": "1795776867069",
+ "buildStep": {
+  "cmdId": "500f14ed-8af7-4777-a8a1-47ebc4bb3a1b",
+  "name": "",
+  "logFile": "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_accel/stereo_tracker_accel/hls/hls.log",
+  "commandLine": "",
+  "args": [],
+  "iniFiles": [],
+  "cwd": "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_accel"
+ }
+}
+</ENTRY>
+<ENTRY>
+{
+ "type": "ET_Status",
+ "dateTimestamp": "Fri Nov 27 10:54:27 2026",
+ "timestampMillis": "1795776867069",
+ "status": {
+  "cmdId": "500f14ed-8af7-4777-a8a1-47ebc4bb3a1b",
+  "state": "CS_RUNNING"
+ }
+}
+</ENTRY>
+<ENTRY>
+{
+ "type": "ET_Status",
+ "dateTimestamp": "Fri Nov 27 10:57:42 2026",
+ "timestampMillis": "1795777062939",
+ "status": {
+  "cmdId": "500f14ed-8af7-4777-a8a1-47ebc4bb3a1b",
+  "state": "CS_PASSED"
+ }
+}
+</ENTRY>
+<ENTRY>
+{
+ "type": "ET_Status",
+ "dateTimestamp": "Fri Nov 27 10:57:43 2026",
+ "timestampMillis": "1795777063039",
+ "status": {
+  "cmdId": "fe3a8d2a-55cc-4959-a42b-aa392dc1e275",
+  "state": "CS_PASSED"
+ }
+}
+</ENTRY>
+<ENTRY>
+{
+ "type": "ET_Report",
+ "dateTimestamp": "Fri Nov 27 10:57:43 2026",
+ "timestampMillis": "1795777063040",
+ "report": {
+  "path": "",
+  "name": "",
+  "fileType": "HTML",
+  "reportType": "GLOBAL_RULECHECK_GUIDANCE",
+  "cmdId": ""
+ }
+}
+</ENTRY>
+<ENTRY>
+{
+ "type": "ET_Report",
+ "dateTimestamp": "Fri Nov 27 10:57:43 2026",
+ "timestampMillis": "1795777063040",
+ "report": {
+  "path": "",
+  "name": "",
+  "fileType": "BINARY_PROTOBUF",
+  "reportType": "GLOBAL_RULECHECK_GUIDANCE",
+  "cmdId": ""
+ }
+}
+</ENTRY>

@@ -1,0 +1,32 @@
+# Vivado / Vitis / Vitis HLS generated files
+*.jou
+*.log
+*.str
+*.xpr
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.gen/
+*.srcs/
+.Xil/
+*.bit
+*.bin
+*.xsa
+_ide/
+build/
+hls/
+
+# PetaLinux & Yocto artifacts
+*.wic
+*.img
+*.tar.gz
+downloads/
+sstate-cache/
+
+# OS & Editor files
+.DS_Store
+.vscode/
+*.swp
+*~

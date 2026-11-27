@@ -1,0 +1,27 @@
+[
+  {
+    "directory": "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_accel",
+    "arguments": [
+      "/home/hsun/apps/Vitis/2024.2/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/hsun/apps/Vitis/2024.2/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/home/hsun/apps/Vitis/2024.2/common/technology/autopilot",
+      "-fhlstoplevel=stereo_tracker_accel",
+      "-c",
+      "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker.cpp"
+    ],
+    "file": "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker.cpp"
+  },
+  {
+    "directory": "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_accel",
+    "arguments": [
+      "/home/hsun/apps/Vitis/2024.2/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/hsun/apps/Vitis/2024.2/tps/lnx64/gcc-8.3.0",
+      "-fhls-tb",
+      "-hls-sim-headers-dir=/home/hsun/apps/Vitis/2024.2/include",
+      "-c",
+      "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_tb.cpp"
+    ],
+    "file": "/home/hsun/Documents/GitHub/zuboard-1cg-getting-started/05-custom-hls-stereo-ip/hls_src/stereo_tracker_tb.cpp"
+  }
+]
